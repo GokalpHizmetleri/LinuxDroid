@@ -261,7 +261,7 @@ export default function LaunchScreen() {
             <Ionicons name="information-circle-outline" size={16} color={C.accentCyan} />
             <Text style={styles.infoText}>
               {selectedMode === "cli"
-                ? `Installs ${params.name} in Termux using proot. Provides full shell access without root.`
+                ? `Installs ${params.name} in Termux using proot. Provides full shell access with root access.`
                 : `Installs ${params.name} with XFCE desktop. Open NetHunter KeX after installation to start the GUI.`}
             </Text>
           </View>
