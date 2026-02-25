@@ -17,7 +17,7 @@ const APK_REGISTRY = [
     name: "NetHunter KeX",
     packageName: "com.offsec.nethunter.kex",
     version: "1.3",
-    description: "Kali NetHunter Desktop Experience",
+    description: "Run XFCE-Enabled Distros",
     downloadUrl: "https://store.nethunter.com/repo/com.offsec.nethunter.kex_11525001.apk",
     size: "~15 MB",
     required: true,

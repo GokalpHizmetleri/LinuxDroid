@@ -12,8 +12,7 @@ import {
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as FileSystem from "expo-file-system/legacy";
-import * as IntentLauncher from "expo-intent-launcher";
+import * as Linking from "expo-linking";
 import { useQuery } from "@tanstack/react-query";
 import Colors from "@/constants/colors";
 
@@ -189,67 +188,8 @@ export default function SetupScreen() {
     const apk = apks.find((a) => a.id === apkId);
     if (!apk) return;
 
-    const key = apkId === "termux" ? "termux" : "nethunter";
-    const progressKey = apkId === "termux" ? "termuxProgress" : "nethunterProgress";
-    const errorKey = apkId === "termux" ? "termuxError" : "nethunterError";
-
-    if (Platform.OS !== "android") {
-      Alert.alert(
-        "Android Only",
-        "APK installation requires a physical Android device. Run this app on your Android phone.",
-        [{ text: "OK" }]
-      );
-      return;
-    }
-
-    setDlState((prev) => ({ ...prev, [key]: "downloading", [progressKey]: 0 }));
-    addLog(`[DOWNLOAD] Fetching ${apk.name}...`, C.accentCyan);
-
-    try {
-      const fileUri = `${FileSystem.cacheDirectory}${apk.id}.apk`;
-
-      const downloadResumable = FileSystem.createDownloadResumable(
-        apk.downloadUrl,
-        fileUri,
-        {},
-        (downloadProgress) => {
-          const total = downloadProgress.totalBytesExpectedToWrite;
-          const progress = total > 0
-            ? (downloadProgress.totalBytesWritten / total) * 100
-            : 0;
-          setDlState((prev) => ({ ...prev, [progressKey]: progress }));
-        }
-      );
-
-      addLog(`[DOWNLOAD] Connecting to server...`, C.accentCyan);
-      const result = await downloadResumable.downloadAsync();
-
-      if (!result) throw new Error("Download returned no result");
-
-      addLog(`[DOWNLOAD] ${apk.name} download complete.`, C.accentCyan);
-      addLog(`[INSTALL] Opening system installer...`, C.accentPurple);
-
-      setDlState((prev) => ({ ...prev, [key]: "installing" }));
-
-      const contentUri = await FileSystem.getContentUriAsync(result.uri);
-      await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
-        data: contentUri,
-        flags: 1,
-        type: "application/vnd.android.package-archive",
-      });
-
-      addLog(`[OK] Installer launched for ${apk.name}.`, C.accent);
-      setDlState((prev) => ({ ...prev, [key]: "done", [progressKey]: 0 }));
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Unknown error";
-      addLog(`[ERROR] ${apk.name}: ${message}`, C.accentRed);
-      setDlState((prev) => ({
-        ...prev,
-        [key]: "error",
-        [errorKey]: message,
-        [progressKey]: 0,
-      }));
-    }
+    addLog(`[REDIRECT] Opening download link for ${apk.name}...`, C.accentCyan);
+    Linking.openURL(apk.downloadUrl);
   };
 
   const termuxApk = apks?.find((a) => a.id === "termux");
