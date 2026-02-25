@@ -26,17 +26,15 @@ interface Distro {
   supportsCli: boolean;
   supportsDesktop: boolean;
   beta: boolean;
-  scriptBase: string;
 }
 
 const DISTRO_ICONS: Record<string, string> = {
   ubuntu: "ubuntu",
   debian: "debian",
-  manjaro: "manjaro",
-  kali: "kali-linux",
+  kali: "shield-skull",
+  void: "linux",
   fedora: "fedora",
   arch: "arch",
-  alpine: "linux",
 };
 
 function AnimatedDistroCard({ distro, index }: { distro: Distro; index: number }) {
@@ -61,6 +59,7 @@ function AnimatedDistroCard({ distro, index }: { distro: Distro; index: number }
         name: distro.name,
         version: distro.version,
         accentColor: distro.accentColor,
+        supportsCli: distro.supportsCli ? "true" : "false",
         supportsDesktop: distro.supportsDesktop ? "true" : "false",
       },
     });
@@ -98,19 +97,16 @@ function AnimatedDistroCard({ distro, index }: { distro: Distro; index: number }
             <Text style={styles.distroDesc} numberOfLines={2}>{distro.description}</Text>
 
             <View style={styles.modesRow}>
-              <View style={[styles.modeChip, { backgroundColor: "rgba(0,255,65,0.1)", borderColor: "rgba(0,255,65,0.3)" }]}>
-                <MaterialCommunityIcons name="console-line" size={10} color={C.accent} />
-                <Text style={[styles.modeChipText, { color: C.accent }]}>CLI</Text>
-              </View>
-              {distro.supportsDesktop ? (
+              {distro.supportsCli && (
+                <View style={[styles.modeChip, { backgroundColor: "rgba(0,255,65,0.1)", borderColor: "rgba(0,255,65,0.3)" }]}>
+                  <MaterialCommunityIcons name="console-line" size={10} color={C.accent} />
+                  <Text style={[styles.modeChipText, { color: C.accent }]}>CLI</Text>
+                </View>
+              )}
+              {distro.supportsDesktop && (
                 <View style={[styles.modeChip, { backgroundColor: "rgba(0,229,255,0.1)", borderColor: "rgba(0,229,255,0.3)" }]}>
                   <MaterialCommunityIcons name="monitor" size={10} color={C.accentCyan} />
                   <Text style={[styles.modeChipText, { color: C.accentCyan }]}>DESKTOP</Text>
-                </View>
-              ) : (
-                <View style={[styles.modeChip, { backgroundColor: "rgba(100,100,100,0.1)", borderColor: "rgba(100,100,100,0.3)" }]}>
-                  <MaterialCommunityIcons name="monitor-off" size={10} color={C.textMuted} />
-                  <Text style={[styles.modeChipText, { color: C.textMuted }]}>CLI ONLY</Text>
                 </View>
               )}
             </View>

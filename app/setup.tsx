@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
-  Linking,
   Alert,
 } from "react-native";
 import { router } from "expo-router";
@@ -16,7 +15,6 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as FileSystem from "expo-file-system";
 import * as IntentLauncher from "expo-intent-launcher";
 import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/query-client";
 import Colors from "@/constants/colors";
 
 const C = Colors.dark;
@@ -32,36 +30,15 @@ interface ApkInfo {
   required: boolean;
 }
 
-type AppStatus = "checking" | "installed" | "not_installed" | "downloading" | "installing" | "error";
+type DownloadStatus = "idle" | "downloading" | "installing" | "done" | "error";
 
-interface AppState {
-  termux: AppStatus;
-  nethunter: AppStatus;
+interface DownloadState {
+  termux: DownloadStatus;
+  nethunter: DownloadStatus;
   termuxProgress: number;
   nethunterProgress: number;
   termuxError?: string;
   nethunterError?: string;
-}
-
-function TerminalLine({ text, delay = 0, color = C.accent }: { text: string; delay?: number; color?: string }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [delay, opacity]);
-
-  return (
-    <Animated.Text style={[styles.termLine, { color, opacity }]}>
-      {text}
-    </Animated.Text>
-  );
 }
 
 function BlinkingCursor() {
@@ -81,7 +58,7 @@ function BlinkingCursor() {
   return <Animated.Text style={[styles.cursor, { opacity }]}>█</Animated.Text>;
 }
 
-function ProgressBar({ progress, color = C.accent }: { progress: number; color?: string }) {
+function ProgressBar({ progress, color = C.accentCyan }: { progress: number; color?: string }) {
   const width = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -118,21 +95,19 @@ function AppCard({
   onDownload,
 }: {
   apk: ApkInfo;
-  status: AppStatus;
+  status: DownloadStatus;
   progress: number;
   errorMsg?: string;
   onDownload: () => void;
 }) {
-  const isInstalled = status === "installed";
   const isDownloading = status === "downloading";
   const isInstalling = status === "installing";
+  const isDone = status === "done";
   const isError = status === "error";
-  const isChecking = status === "checking";
-
-  const iconColor = isInstalled ? C.accent : isError ? C.accentRed : C.accentCyan;
+  const iconColor = isDone ? C.accent : isError ? C.accentRed : C.accentCyan;
 
   return (
-    <View style={[styles.appCard, isInstalled && styles.appCardInstalled]}>
+    <View style={[styles.appCard, isDone && styles.appCardDone]}>
       <View style={styles.appCardHeader}>
         <View style={[styles.appIconCircle, { borderColor: iconColor }]}>
           <MaterialCommunityIcons
@@ -141,6 +116,7 @@ function AppCard({
             color={iconColor}
           />
         </View>
+
         <View style={styles.appCardInfo}>
           <View style={styles.appNameRow}>
             <Text style={styles.appName}>{apk.name}</Text>
@@ -149,32 +125,21 @@ function AppCard({
           <Text style={styles.appDesc}>{apk.description}</Text>
           <Text style={styles.appSize}>Size: {apk.size}</Text>
         </View>
-        <View style={styles.statusBadge}>
-          {isChecking && (
-            <View style={[styles.badge, { borderColor: C.textDim }]}>
-              <Text style={[styles.badgeText, { color: C.textDim }]}>CHECKING</Text>
-            </View>
-          )}
-          {isInstalled && (
-            <View style={[styles.badge, { borderColor: C.accent, backgroundColor: "rgba(0,255,65,0.1)" }]}>
-              <Ionicons name="checkmark" size={12} color={C.accent} />
-              <Text style={[styles.badgeText, { color: C.accent }]}>INSTALLED</Text>
-            </View>
-          )}
-          {isError && (
-            <View style={[styles.badge, { borderColor: C.accentRed }]}>
-              <Text style={[styles.badgeText, { color: C.accentRed }]}>FAILED</Text>
-            </View>
-          )}
-        </View>
+
+        {isDone && (
+          <View style={[styles.badge, { borderColor: C.accent, backgroundColor: "rgba(0,255,65,0.1)" }]}>
+            <Ionicons name="checkmark" size={12} color={C.accent} />
+            <Text style={[styles.badgeText, { color: C.accent }]}>DONE</Text>
+          </View>
+        )}
       </View>
 
       {(isDownloading || isInstalling) && (
         <View style={styles.progressSection}>
           <Text style={styles.progressLabel}>
-            {isDownloading ? "Downloading..." : "Installing..."}
+            {isDownloading ? "Downloading..." : "Opening installer..."}
           </Text>
-          <ProgressBar progress={isInstalling ? 100 : progress} color={C.accentCyan} />
+          <ProgressBar progress={isInstalling ? 100 : progress} />
         </View>
       )}
 
@@ -182,13 +147,13 @@ function AppCard({
         <Text style={styles.errorMsg}>{errorMsg}</Text>
       )}
 
-      {(status === "not_installed" || isError) && (
+      {(status === "idle" || isError) && (
         <TouchableOpacity
           style={styles.downloadBtn}
           onPress={onDownload}
           activeOpacity={0.7}
         >
-          <Ionicons name="download-outline" size={16} color={C.dark ?? "#0a0a0a"} />
+          <Ionicons name="download-outline" size={16} color="#0a0a0a" />
           <Text style={styles.downloadBtnText}>
             {isError ? "RETRY DOWNLOAD" : "DOWNLOAD & INSTALL"}
           </Text>
@@ -200,81 +165,24 @@ function AppCard({
 
 export default function SetupScreen() {
   const insets = useSafeAreaInsets();
-  const [appState, setAppState] = useState<AppState>({
-    termux: "checking",
-    nethunter: "checking",
+  const [dlState, setDlState] = useState<DownloadState>({
+    termux: "idle",
+    nethunter: "idle",
     termuxProgress: 0,
     nethunterProgress: 0,
   });
-  const [logLines, setLogLines] = useState<string[]>([]);
-  const [allReady, setAllReady] = useState(false);
+  const [logLines, setLogLines] = useState<{ text: string; color: string }[]>([
+    { text: "[LinuxDroid] Welcome to LinuxDroid v1.0", color: C.accent },
+    { text: "[LinuxDroid] Download required apps below, then continue.", color: C.textDim },
+  ]);
 
   const { data: apks } = useQuery<ApkInfo[]>({
     queryKey: ["/api/apks"],
   });
 
-  const addLog = (line: string) => {
-    setLogLines((prev) => [...prev.slice(-20), line]);
+  const addLog = (text: string, color = C.textDim) => {
+    setLogLines((prev) => [...prev.slice(-25), { text, color }]);
   };
-
-  const checkAppInstalled = async (packageName: string): Promise<boolean> => {
-    if (Platform.OS !== "android") return false;
-    try {
-      const canOpen = await Linking.canOpenURL(`package:${packageName}`);
-      return canOpen;
-    } catch {
-      return false;
-    }
-  };
-
-  useEffect(() => {
-    if (!apks) return;
-
-    const runChecks = async () => {
-      addLog("[LinuxDroid] Initializing setup sequence...");
-      addLog("[LinuxDroid] Checking required dependencies...");
-
-      await new Promise((r) => setTimeout(r, 800));
-
-      const termuxApk = apks.find((a) => a.id === "termux");
-      const nethunterApk = apks.find((a) => a.id === "nethunter-kex");
-
-      addLog(`[CHECK] Scanning for com.termux...`);
-      const termuxInstalled = await checkAppInstalled("com.termux");
-      addLog(termuxInstalled ? "[OK] Termux detected." : "[WARN] Termux not found.");
-
-      setAppState((prev) => ({
-        ...prev,
-        termux: termuxInstalled ? "installed" : "not_installed",
-      }));
-
-      await new Promise((r) => setTimeout(r, 400));
-
-      addLog(`[CHECK] Scanning for com.offsec.nethunter.kex...`);
-      const nethunterInstalled = await checkAppInstalled("com.offsec.nethunter.kex");
-      addLog(nethunterInstalled ? "[OK] NetHunter KeX detected." : "[WARN] NetHunter KeX not found.");
-
-      setAppState((prev) => ({
-        ...prev,
-        nethunter: nethunterInstalled ? "installed" : "not_installed",
-      }));
-
-      if (termuxInstalled && nethunterInstalled) {
-        addLog("[LinuxDroid] All dependencies satisfied. Ready to launch.");
-        setAllReady(true);
-      }
-    };
-
-    runChecks();
-  }, [apks]);
-
-  useEffect(() => {
-    const both = appState.termux === "installed" && appState.nethunter === "installed";
-    if (both) {
-      setAllReady(true);
-      addLog("[LinuxDroid] Environment ready. Proceed to distro selection.");
-    }
-  }, [appState.termux, appState.nethunter]);
 
   const downloadAndInstall = async (apkId: string) => {
     if (!apks) return;
@@ -288,14 +196,14 @@ export default function SetupScreen() {
     if (Platform.OS !== "android") {
       Alert.alert(
         "Android Only",
-        "APK installation is only supported on Android devices. Please run this app on an Android device.",
+        "APK installation requires a physical Android device. Run this app on your Android phone.",
         [{ text: "OK" }]
       );
       return;
     }
 
-    setAppState((prev) => ({ ...prev, [key]: "downloading", [progressKey]: 0 }));
-    addLog(`[DOWNLOAD] Fetching ${apk.name} ${apk.version}...`);
+    setDlState((prev) => ({ ...prev, [key]: "downloading", [progressKey]: 0 }));
+    addLog(`[DOWNLOAD] Fetching ${apk.name}...`, C.accentCyan);
 
     try {
       const fileUri = `${FileSystem.cacheDirectory}${apk.id}.apk`;
@@ -305,46 +213,37 @@ export default function SetupScreen() {
         fileUri,
         {},
         (downloadProgress) => {
-          const progress =
-            (downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite) * 100;
-          setAppState((prev) => ({ ...prev, [progressKey]: progress }));
+          const total = downloadProgress.totalBytesExpectedToWrite;
+          const progress = total > 0
+            ? (downloadProgress.totalBytesWritten / total) * 100
+            : 0;
+          setDlState((prev) => ({ ...prev, [progressKey]: progress }));
         }
       );
 
-      addLog(`[DOWNLOAD] Connecting to release server...`);
+      addLog(`[DOWNLOAD] Connecting to server...`, C.accentCyan);
       const result = await downloadResumable.downloadAsync();
 
-      if (!result) {
-        throw new Error("Download failed - no result returned");
-      }
+      if (!result) throw new Error("Download returned no result");
 
-      addLog(`[DOWNLOAD] ${apk.name} download complete.`);
-      addLog(`[INSTALL] Launching system installer for ${apk.name}...`);
+      addLog(`[DOWNLOAD] ${apk.name} download complete.`, C.accentCyan);
+      addLog(`[INSTALL] Opening system installer...`, C.accentPurple);
 
-      setAppState((prev) => ({ ...prev, [key]: "installing" }));
+      setDlState((prev) => ({ ...prev, [key]: "installing" }));
 
       const contentUri = await FileSystem.getContentUriAsync(result.uri);
-
       await IntentLauncher.startActivityAsync("android.intent.action.VIEW", {
         data: contentUri,
         flags: 1,
         type: "application/vnd.android.package-archive",
       });
 
-      addLog(`[INSTALL] Installer launched. Follow on-screen prompts.`);
-
-      await new Promise((r) => setTimeout(r, 3000));
-      const installed = await checkAppInstalled(apk.packageName);
-      setAppState((prev) => ({
-        ...prev,
-        [key]: installed ? "installed" : "not_installed",
-        [progressKey]: 0,
-      }));
-      addLog(installed ? `[OK] ${apk.name} installed successfully.` : `[WARN] Waiting for user to complete installation.`);
+      addLog(`[OK] Installer launched for ${apk.name}.`, C.accent);
+      setDlState((prev) => ({ ...prev, [key]: "done", [progressKey]: 0 }));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      addLog(`[ERROR] Failed to install ${apk.name}: ${message}`);
-      setAppState((prev) => ({
+      addLog(`[ERROR] ${apk.name}: ${message}`, C.accentRed);
+      setDlState((prev) => ({
         ...prev,
         [key]: "error",
         [errorKey]: message,
@@ -383,14 +282,9 @@ export default function SetupScreen() {
           </View>
           <ScrollView style={styles.terminalContent} nestedScrollEnabled showsVerticalScrollIndicator={false}>
             {logLines.map((line, i) => (
-              <TerminalLine key={i} text={line} delay={0} color={
-                line.includes("[OK]") ? C.accent :
-                line.includes("[ERROR]") ? C.accentRed :
-                line.includes("[WARN]") ? C.accentAmber :
-                line.includes("[DOWNLOAD]") ? C.accentCyan :
-                line.includes("[INSTALL]") ? C.accentPurple :
-                C.textDim
-              } />
+              <Text key={i} style={[styles.termLine, { color: line.color }]}>
+                {line.text}
+              </Text>
             ))}
             <View style={styles.cursorRow}>
               <Text style={[styles.termLine, { color: C.accent }]}>$ </Text>
@@ -401,63 +295,47 @@ export default function SetupScreen() {
 
         <Text style={styles.sectionTitle}>REQUIRED PACKAGES</Text>
 
-        {termuxApk && (
+        {termuxApk ? (
           <AppCard
             apk={termuxApk}
-            status={appState.termux}
-            progress={appState.termuxProgress}
-            errorMsg={appState.termuxError}
+            status={dlState.termux}
+            progress={dlState.termuxProgress}
+            errorMsg={dlState.termuxError}
             onDownload={() => downloadAndInstall("termux")}
           />
+        ) : (
+          <View style={styles.skeletonCard} />
         )}
 
-        {nethunterApk && (
+        {nethunterApk ? (
           <AppCard
             apk={nethunterApk}
-            status={appState.nethunter}
-            progress={appState.nethunterProgress}
-            errorMsg={appState.nethunterError}
+            status={dlState.nethunter}
+            progress={dlState.nethunterProgress}
+            errorMsg={dlState.nethunterError}
             onDownload={() => downloadAndInstall("nethunter-kex")}
           />
-        )}
-
-        {!termuxApk && !nethunterApk && (
-          <View style={styles.loadingCards}>
-            <View style={styles.skeletonCard} />
-            <View style={styles.skeletonCard} />
-          </View>
+        ) : (
+          <View style={styles.skeletonCard} />
         )}
 
         {Platform.OS !== "android" && (
           <View style={styles.warningBox}>
-            <Ionicons name="information-circle-outline" size={18} color={C.accentAmber} />
+            <Ionicons name="phone-portrait-outline" size={18} color={C.accentAmber} />
             <Text style={styles.warningText}>
-              APK installation requires a physical Android device. Install manually via APK links above.
+              APK installation requires a physical Android device. Scan the QR code in Expo Go on your phone.
             </Text>
           </View>
         )}
 
         <TouchableOpacity
-          style={[styles.continueBtn, !allReady && styles.continueBtnDisabled]}
+          style={styles.continueBtn}
           onPress={() => router.push("/distros")}
-          disabled={!allReady}
           activeOpacity={0.8}
         >
-          <Text style={[styles.continueBtnText, !allReady && styles.continueBtnTextDisabled]}>
-            {allReady ? "CONTINUE TO DISTROS" : "WAITING FOR DEPENDENCIES..."}
-          </Text>
-          {allReady && <Ionicons name="arrow-forward" size={18} color="#0a0a0a" />}
+          <Text style={styles.continueBtnText}>CONTINUE TO DISTROS</Text>
+          <Ionicons name="arrow-forward" size={18} color="#0a0a0a" />
         </TouchableOpacity>
-
-        {!allReady && (
-          <TouchableOpacity
-            style={styles.skipBtn}
-            onPress={() => router.push("/distros")}
-            activeOpacity={0.6}
-          >
-            <Text style={styles.skipBtnText}>Skip (demo mode)</Text>
-          </TouchableOpacity>
-        )}
       </ScrollView>
     </View>
   );
@@ -509,7 +387,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     overflow: "hidden",
-    height: 180,
+    height: 140,
   },
   terminalHeader: {
     flexDirection: "row",
@@ -555,7 +433,7 @@ const styles = StyleSheet.create({
     color: C.textDim,
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 2,
-    marginTop: 8,
+    marginTop: 4,
   },
   appCard: {
     backgroundColor: C.card,
@@ -565,7 +443,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
   },
-  appCardInstalled: {
+  appCardDone: {
     borderColor: "rgba(0,255,65,0.3)",
     backgroundColor: "rgba(0,255,65,0.03)",
   },
@@ -613,9 +491,6 @@ const styles = StyleSheet.create({
     color: C.textMuted,
     fontFamily: "ShareTechMono_400Regular",
   },
-  statusBadge: {
-    alignItems: "flex-end",
-  },
   badge: {
     flexDirection: "row",
     alignItems: "center",
@@ -624,6 +499,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 3,
+    alignSelf: "flex-start",
   },
   badgeText: {
     fontSize: 9,
@@ -681,9 +557,6 @@ const styles = StyleSheet.create({
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 1,
   },
-  loadingCards: {
-    gap: 12,
-  },
   skeletonCard: {
     height: 100,
     borderRadius: 12,
@@ -716,26 +589,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: 8,
   },
-  continueBtnDisabled: {
-    backgroundColor: C.border,
-  },
   continueBtnText: {
     fontSize: 13,
     fontWeight: "700",
     color: "#0a0a0a",
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 1.5,
-  },
-  continueBtnTextDisabled: {
-    color: C.textMuted,
-  },
-  skipBtn: {
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  skipBtnText: {
-    fontSize: 12,
-    color: C.textMuted,
-    fontFamily: "ShareTechMono_400Regular",
   },
 });

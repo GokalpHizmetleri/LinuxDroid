@@ -22,47 +22,41 @@ type LaunchMode = "cli" | "desktop" | null;
 
 const TERMUX_SCRIPTS: Record<string, { cli: string; desktop: string }> = {
   ubuntu: {
-    cli: "proot-distro login ubuntu",
-    desktop: "proot-distro login ubuntu -- bash -c 'DISPLAY=:1 startxfce4'",
+    cli: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Ubuntu22/ubuntu22.sh -O ubuntu22.sh && chmod +x ubuntu22.sh && bash ubuntu22.sh",
+    desktop: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Ubuntu22/ubuntu22-xfce.sh -O ubuntu22-xfce.sh && chmod +x ubuntu22-xfce.sh && bash ubuntu22-xfce.sh",
   },
   debian: {
-    cli: "proot-distro login debian",
-    desktop: "proot-distro login debian -- bash -c 'DISPLAY=:1 startxfce4'",
-  },
-  manjaro: {
-    cli: "proot-distro login manjaro",
-    desktop: "proot-distro login manjaro -- bash -c 'DISPLAY=:1 startxfce4'",
+    cli: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Debian/debian.sh -O debian.sh && chmod +x debian.sh && bash debian.sh",
+    desktop: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Debian/debian-xfce.sh -O debian-xfce.sh && chmod +x debian-xfce.sh && bash debian-xfce.sh",
   },
   kali: {
-    cli: "proot-distro login kali-rolling",
-    desktop: "proot-distro login kali-rolling -- bash -c 'DISPLAY=:1 kex start'",
+    cli: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Kali/kali.sh -O kali.sh && chmod +x kali.sh && bash kali.sh",
+    desktop: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Kali/kali-xfce.sh -O kali-xfce.sh && chmod +x kali-xfce.sh && bash kali-xfce.sh",
+  },
+  void: {
+    cli: "",
+    desktop: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Void/void-xfce.sh && chmod +x void-xfce.sh && bash void-xfce.sh",
   },
   fedora: {
-    cli: "proot-distro login fedora",
-    desktop: "proot-distro login fedora -- bash -c 'DISPLAY=:1 startxfce4'",
+    cli: "",
+    desktop: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Fedora/fedora-xfce.sh -O fedora-xfce.sh && chmod +x fedora-xfce.sh && bash fedora-xfce.sh",
   },
   arch: {
-    cli: "proot-distro login archlinux",
-    desktop: "proot-distro login archlinux -- bash -c 'DISPLAY=:1 startxfce4'",
-  },
-  alpine: {
-    cli: "proot-distro login alpine",
-    desktop: "",
+    cli: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Arch/armhf/arch.sh -O arch.sh && chmod +x arch.sh && bash arch.sh",
+    desktop: "pkg update -y && pkg install wget curl proot tar -y && wget https://raw.githubusercontent.com/AndronixApp/AndronixOrigin/master/Installer/Arch/armhf/arch-xfce.sh -O arch-xfce.sh && chmod +x arch-xfce.sh && bash arch-xfce.sh",
   },
 };
 
 const DISTRO_ICONS: Record<string, string> = {
   ubuntu: "ubuntu",
   debian: "debian",
-  manjaro: "manjaro",
-  kali: "kali-linux",
+  kali: "shield-skull",
+  void: "linux",
   fedora: "fedora",
   arch: "arch",
-  alpine: "linux",
 };
 
 function ModeCard({
-  mode,
   title,
   subtitle,
   icon,
@@ -71,7 +65,6 @@ function ModeCard({
   onSelect,
   accentColor,
 }: {
-  mode: LaunchMode;
   title: string;
   subtitle: string;
   icon: string;
@@ -112,7 +105,7 @@ function ModeCard({
         <Text style={[
           styles.modeTitle,
           selected && { color: accentColor },
-          disabled && { color: C.textMuted }
+          disabled && { color: C.textMuted },
         ]}>
           {title}
         </Text>
@@ -150,6 +143,7 @@ export default function LaunchScreen() {
     name: string;
     version: string;
     accentColor: string;
+    supportsCli: string;
     supportsDesktop: string;
   }>();
 
@@ -158,6 +152,7 @@ export default function LaunchScreen() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
 
+  const supportsCli = params.supportsCli === "true";
   const supportsDesktop = params.supportsDesktop === "true";
   const accentColor = params.accentColor || C.accent;
   const scripts = TERMUX_SCRIPTS[params.id] || { cli: "", desktop: "" };
@@ -173,10 +168,14 @@ export default function LaunchScreen() {
   }, [headerAnim]);
 
   useEffect(() => {
+    if (!supportsCli && selectedMode === "cli") setSelectedMode(null);
+  }, [supportsCli, selectedMode]);
+
+  useEffect(() => {
     if (launching) {
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.05, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.04, duration: 600, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
         ])
       );
@@ -216,7 +215,7 @@ export default function LaunchScreen() {
       }
     } else {
       Alert.alert(
-        `${params.name} - ${selectedMode === "cli" ? "CLI Mode" : "Desktop Mode"}`,
+        `${params.name} — ${selectedMode === "cli" ? "CLI Mode" : "Desktop Mode"}`,
         `On your Android device, open Termux and run:\n\n${currentScript}`,
         [{ text: "Got it" }]
       );
@@ -242,13 +241,15 @@ export default function LaunchScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={[styles.distroHeader, { opacity: headerAnim, transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }] }]}>
+        <Animated.View style={[
+          styles.distroHeader,
+          {
+            opacity: headerAnim,
+            transform: [{ translateY: headerAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }],
+          },
+        ]}>
           <View style={[styles.distroHeroIcon, { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}40` }]}>
-            <MaterialCommunityIcons
-              name={iconName as any}
-              size={72}
-              color={accentColor}
-            />
+            <MaterialCommunityIcons name={iconName as any} size={72} color={accentColor} />
           </View>
           <View style={styles.distroHeroInfo}>
             <Text style={styles.distroHeroName}>{params.name}</Text>
@@ -266,18 +267,17 @@ export default function LaunchScreen() {
 
         <View style={styles.modesRow}>
           <ModeCard
-            mode="cli"
             title="CLI Only"
             subtitle="Terminal interface"
             icon="console-line"
             selected={selectedMode === "cli"}
+            disabled={!supportsCli}
             onSelect={() => setSelectedMode("cli")}
             accentColor={accentColor}
           />
           <ModeCard
-            mode="desktop"
             title="Desktop"
-            subtitle="Full GUI via KeX"
+            subtitle="XFCE via KeX"
             icon="monitor-screenshot"
             selected={selectedMode === "desktop"}
             disabled={!supportsDesktop}
@@ -288,21 +288,12 @@ export default function LaunchScreen() {
 
         {selectedMode && (
           <View style={styles.infoBox}>
-            {selectedMode === "cli" ? (
-              <>
-                <Ionicons name="information-circle-outline" size={16} color={C.accentCyan} />
-                <Text style={styles.infoText}>
-                  Launches a terminal session inside {params.name} using proot-distro. Full shell access with root privileges.
-                </Text>
-              </>
-            ) : (
-              <>
-                <Ionicons name="information-circle-outline" size={16} color={C.accentCyan} />
-                <Text style={styles.infoText}>
-                  Launches {params.name} with a graphical desktop environment via NetHunter KeX. Requires KeX server to be running.
-                </Text>
-              </>
-            )}
+            <Ionicons name="information-circle-outline" size={16} color={C.accentCyan} />
+            <Text style={styles.infoText}>
+              {selectedMode === "cli"
+                ? `Installs ${params.name} in Termux using proot. Provides full shell access without root.`
+                : `Installs ${params.name} with XFCE desktop. Open NetHunter KeX after installation to start the GUI.`}
+            </Text>
           </View>
         )}
 
@@ -312,7 +303,7 @@ export default function LaunchScreen() {
           <Text style={styles.requirementsTitle}>REQUIREMENTS</Text>
           <View style={styles.reqItem}>
             <Ionicons name="checkmark-circle-outline" size={14} color={C.accent} />
-            <Text style={styles.reqText}>Termux installed</Text>
+            <Text style={styles.reqText}>Termux installed & updated</Text>
           </View>
           {selectedMode === "desktop" && (
             <View style={styles.reqItem}>
@@ -322,11 +313,11 @@ export default function LaunchScreen() {
           )}
           <View style={styles.reqItem}>
             <Ionicons name="information-circle-outline" size={14} color={C.textDim} />
-            <Text style={styles.reqText}>proot-distro installed in Termux</Text>
+            <Text style={styles.reqText}>Stable internet connection</Text>
           </View>
           <View style={styles.reqItem}>
             <Ionicons name="information-circle-outline" size={14} color={C.textDim} />
-            <Text style={styles.reqText}>{params.name} rootfs downloaded</Text>
+            <Text style={styles.reqText}>~2 GB free storage</Text>
           </View>
         </View>
 
@@ -335,7 +326,6 @@ export default function LaunchScreen() {
             style={[
               styles.launchBtn,
               { backgroundColor: selectedMode ? accentColor : C.border },
-              !selectedMode && styles.launchBtnDisabled,
             ]}
             onPress={handleLaunch}
             disabled={!selectedMode || launching}
@@ -361,10 +351,7 @@ export default function LaunchScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: C.background,
-  },
+  container: { flex: 1, backgroundColor: C.background },
   headerBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -387,13 +374,8 @@ const styles = StyleSheet.create({
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 3,
   },
-  scroll: {
-    flex: 1,
-  },
-  content: {
-    padding: 20,
-    gap: 16,
-  },
+  scroll: { flex: 1 },
+  content: { padding: 20, gap: 16 },
   distroHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -408,10 +390,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  distroHeroInfo: {
-    flex: 1,
-    gap: 6,
-  },
+  distroHeroInfo: { flex: 1, gap: 6 },
   distroHeroName: {
     fontSize: 26,
     fontWeight: "700",
@@ -434,30 +413,20 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 4,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusText: {
     fontSize: 9,
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 1,
   },
-  separator: {
-    height: 1,
-    marginVertical: 4,
-  },
+  separator: { height: 1, marginVertical: 4 },
   sectionLabel: {
     fontSize: 11,
     color: C.textDim,
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 2,
   },
-  modesRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
+  modesRow: { flexDirection: "row", gap: 12 },
   modeCard: {
     backgroundColor: C.card,
     borderRadius: 14,
@@ -469,10 +438,9 @@ const styles = StyleSheet.create({
     position: "relative",
     minHeight: 120,
     justifyContent: "center",
+    flex: 1,
   },
-  modeCardDisabled: {
-    opacity: 0.4,
-  },
+  modeCardDisabled: { opacity: 0.4 },
   modeTitle: {
     fontSize: 14,
     fontWeight: "600",
@@ -480,11 +448,7 @@ const styles = StyleSheet.create({
     fontFamily: "ShareTechMono_400Regular",
     textAlign: "center",
   },
-  modeSub: {
-    fontSize: 11,
-    color: C.textDim,
-    textAlign: "center",
-  },
+  modeSub: { fontSize: 11, color: C.textDim, textAlign: "center" },
   disabledBadge: {
     position: "absolute",
     top: 8,
@@ -516,15 +480,8 @@ const styles = StyleSheet.create({
     padding: 14,
     alignItems: "flex-start",
   },
-  infoText: {
-    flex: 1,
-    fontSize: 12,
-    color: C.textDim,
-    lineHeight: 18,
-  },
-  cmdPreview: {
-    gap: 8,
-  },
+  infoText: { flex: 1, fontSize: 12, color: C.textDim, lineHeight: 18 },
+  cmdPreview: { gap: 8 },
   cmdLabel: {
     fontSize: 9,
     color: C.textMuted,
@@ -542,12 +499,12 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
   },
   cmdPrompt: {
-    fontSize: 13,
+    fontSize: 12,
     color: C.accent,
     fontFamily: "ShareTechMono_400Regular",
   },
   cmdText: {
-    fontSize: 13,
+    fontSize: 12,
     color: C.accentCyan,
     fontFamily: "ShareTechMono_400Regular",
     flex: 1,
@@ -567,16 +524,8 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     marginBottom: 2,
   },
-  reqItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  reqText: {
-    fontSize: 13,
-    color: C.textDim,
-    fontFamily: "ShareTechMono_400Regular",
-  },
+  reqItem: { flexDirection: "row", alignItems: "center", gap: 10 },
+  reqText: { fontSize: 13, color: C.textDim, fontFamily: "ShareTechMono_400Regular" },
   launchBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -586,7 +535,6 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     marginTop: 4,
   },
-  launchBtnDisabled: {},
   launchBtnText: {
     fontSize: 13,
     fontWeight: "700",
