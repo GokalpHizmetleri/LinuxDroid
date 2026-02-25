@@ -6,14 +6,13 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
-  Linking,
-  Alert,
   ScrollView,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Clipboard from "expo-clipboard";
 import Colors from "@/constants/colors";
 
 const C = Colors.dark;
@@ -148,7 +147,7 @@ export default function LaunchScreen() {
   }>();
 
   const [selectedMode, setSelectedMode] = useState<LaunchMode>(null);
-  const [launching, setLaunching] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const headerAnim = useRef(new Animated.Value(0)).current;
 
@@ -172,56 +171,27 @@ export default function LaunchScreen() {
   }, [supportsCli, selectedMode]);
 
   useEffect(() => {
-    if (launching) {
+    if (copied) {
       const pulse = Animated.loop(
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.04, duration: 600, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.03, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
         ])
       );
       pulse.start();
       return () => pulse.stop();
     }
-  }, [launching, pulseAnim]);
+  }, [copied, pulseAnim]);
 
-  const handleLaunch = async () => {
-    if (!selectedMode) return;
+  const handleCopyCommand = async () => {
+    if (!selectedMode || !currentScript) return;
 
     if (Platform.OS !== "web") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    setLaunching(true);
 
-    await new Promise((r) => setTimeout(r, 800));
+    await Clipboard.setStringAsync(currentScript);
+    setCopied(true);
 
-    if (Platform.OS === "android") {
-      try {
-        const termuxUrl = `termux://run-command?cmd=${encodeURIComponent(currentScript)}`;
-        const canOpen = await Linking.canOpenURL(termuxUrl);
-        if (canOpen) {
-          await Linking.openURL(termuxUrl);
-        } else {
-          await Linking.openURL("termux://");
-          Alert.alert(
-            `Launch ${params.name}`,
-            `Termux opened. Run this command:\n\n${currentScript}`,
-            [{ text: "OK" }]
-          );
-        }
-      } catch {
-        Alert.alert(
-          "Open Termux",
-          `Please open Termux and run:\n\n${currentScript}`,
-          [{ text: "OK" }]
-        );
-      }
-    } else {
-      Alert.alert(
-        `${params.name} — ${selectedMode === "cli" ? "CLI Mode" : "Desktop Mode"}`,
-        `On your Android device, open Termux and run:\n\n${currentScript}`,
-        [{ text: "Got it" }]
-      );
-    }
-
-    setLaunching(false);
+    setTimeout(() => setCopied(false), 3000);
   };
 
   return (
@@ -302,12 +272,12 @@ export default function LaunchScreen() {
         <View style={styles.requirementsBox}>
           <Text style={styles.requirementsTitle}>REQUIREMENTS</Text>
           <View style={styles.reqItem}>
-            <Ionicons name="checkmark-circle-outline" size={14} color={C.accent} />
+            <Ionicons name="information-circle-outline" size={14} color={C.accentAmber} />
             <Text style={styles.reqText}>Termux installed & updated</Text>
           </View>
           {selectedMode === "desktop" && (
             <View style={styles.reqItem}>
-              <Ionicons name="checkmark-circle-outline" size={14} color={C.accent} />
+              <Ionicons name="information-circle-outline" size={14} color={C.accentAmber} />
               <Text style={styles.reqText}>NetHunter KeX installed</Text>
             </View>
           )}
@@ -321,26 +291,45 @@ export default function LaunchScreen() {
           </View>
         </View>
 
+        {copied && (
+          <View style={styles.copiedBanner}>
+            <Ionicons name="checkmark-circle" size={16} color={C.accent} />
+            <Text style={styles.copiedBannerText}>Command copied! Open Termux and paste to run.</Text>
+          </View>
+        )}
+
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
           <TouchableOpacity
             style={[
               styles.launchBtn,
-              { backgroundColor: selectedMode ? accentColor : C.border },
+              {
+                backgroundColor: copied
+                  ? "rgba(0,255,65,0.15)"
+                  : selectedMode
+                  ? accentColor
+                  : C.border,
+                borderWidth: copied ? 1.5 : 0,
+                borderColor: copied ? C.accent : "transparent",
+              },
             ]}
-            onPress={handleLaunch}
-            disabled={!selectedMode || launching}
+            onPress={handleCopyCommand}
+            disabled={!selectedMode}
             activeOpacity={0.8}
           >
             <MaterialCommunityIcons
-              name={launching ? "loading" : "rocket-launch"}
+              name={copied ? "clipboard-check" : "content-copy"}
               size={20}
-              color={selectedMode ? "#0a0a0a" : C.textMuted}
+              color={copied ? C.accent : selectedMode ? "#0a0a0a" : C.textMuted}
             />
-            <Text style={[styles.launchBtnText, !selectedMode && { color: C.textMuted }]}>
-              {launching
-                ? "LAUNCHING..."
+            <Text style={[
+              styles.launchBtnText,
+              !selectedMode && { color: C.textMuted },
+              copied && { color: C.accent },
+            ]}>
+              {copied
+                ? "COMMAND COPIED!"
                 : selectedMode
-                ? `LAUNCH ${params.name.toUpperCase()} ${selectedMode === "cli" ? "CLI" : "DESKTOP"}`
+                ? `COPY ${selectedMode === "cli" ? "CLI" : "DESKTOP"} COMMAND`
                 : "SELECT A MODE FIRST"}
             </Text>
           </TouchableOpacity>
@@ -541,5 +530,22 @@ const styles = StyleSheet.create({
     color: "#0a0a0a",
     fontFamily: "ShareTechMono_400Regular",
     letterSpacing: 1.5,
+  },
+  copiedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "rgba(0,255,65,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(0,255,65,0.3)",
+    borderRadius: 10,
+    padding: 12,
+  },
+  copiedBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: C.accent,
+    fontFamily: "ShareTechMono_400Regular",
+    lineHeight: 18,
   },
 });
