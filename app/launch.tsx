@@ -7,7 +7,6 @@ import {
   Animated,
   Platform,
   ScrollView,
-  Image,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -220,15 +219,7 @@ export default function LaunchScreen() {
           },
         ]}>
           <View style={[styles.distroHeroIcon, { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}40` }]}>
-            {params.id === "kali" ? (
-              <Image 
-                source={require("@/assets/generated_images/generated_image.png")} 
-                style={{ width: 80, height: 80 }} 
-                resizeMode="contain"
-              />
-            ) : (
-              <MaterialCommunityIcons name={iconName as any} size={72} color={accentColor} />
-            )}
+            <MaterialCommunityIcons name={iconName as any} size={72} color={accentColor} />
           </View>
           <View style={styles.distroHeroInfo}>
             <Text style={styles.distroHeroName}>{params.name}</Text>
@@ -270,7 +261,7 @@ export default function LaunchScreen() {
             <Ionicons name="information-circle-outline" size={16} color={C.accentCyan} />
             <Text style={styles.infoText}>
               {selectedMode === "cli"
-                ? `Installs ${params.name} in Termux using proot. Provides full shell access with root access.`
+                ? `Installs ${params.name} in Termux using proot. Provides full shell access without root.`
                 : `Installs ${params.name} with XFCE desktop. Open NetHunter KeX after installation to start the GUI.`}
             </Text>
           </View>
