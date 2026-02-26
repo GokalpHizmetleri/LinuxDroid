@@ -199,7 +199,13 @@ function configureExpoAndLanding(app: express.Application) {
   });
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
+  app.use(express.static(path.resolve(process.cwd(), "static-build"), {
+    setHeaders: (res, path) => {
+      if (path.endsWith(".js") || path.endsWith(".js.map")) {
+        res.setHeader("Content-Type", "application/javascript");
+      }
+    }
+  }));
 
   log("Expo routing: Checking expo-platform header on / and /manifest");
 }

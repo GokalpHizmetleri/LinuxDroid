@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Animated,
   Platform,
+  Image,
 } from "react-native";
 import { router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -77,11 +78,19 @@ function AnimatedDistroCard({ distro, index }: { distro: Distro; index: number }
         <View style={[styles.distroAccentBar, { backgroundColor: distro.accentColor }]} />
         <View style={styles.distroCardInner}>
           <View style={[styles.distroIconWrap, { backgroundColor: `${distro.accentColor}15` }]}>
-            <MaterialCommunityIcons
-              name={iconName as any}
-              size={36}
-              color={distro.accentColor}
-            />
+            {distro.id === "kali" ? (
+              <Image 
+                source={require("@/assets/generated_images/generated_image.png")} 
+                style={{ width: 40, height: 40 }} 
+                resizeMode="contain"
+              />
+            ) : (
+              <MaterialCommunityIcons
+                name={iconName as any}
+                size={36}
+                color={distro.accentColor}
+              />
+            )}
           </View>
 
           <View style={styles.distroInfo}>

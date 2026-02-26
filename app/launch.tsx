@@ -7,6 +7,7 @@ import {
   Animated,
   Platform,
   ScrollView,
+  Image,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -219,7 +220,15 @@ export default function LaunchScreen() {
           },
         ]}>
           <View style={[styles.distroHeroIcon, { backgroundColor: `${accentColor}15`, borderColor: `${accentColor}40` }]}>
-            <MaterialCommunityIcons name={iconName as any} size={72} color={accentColor} />
+            {params.id === "kali" ? (
+              <Image 
+                source={require("@/assets/generated_images/generated_image.png")} 
+                style={{ width: 80, height: 80 }} 
+                resizeMode="contain"
+              />
+            ) : (
+              <MaterialCommunityIcons name={iconName as any} size={72} color={accentColor} />
+            )}
           </View>
           <View style={styles.distroHeroInfo}>
             <Text style={styles.distroHeroName}>{params.name}</Text>
